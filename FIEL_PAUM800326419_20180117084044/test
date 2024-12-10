@@ -1,0 +1,91 @@
+<template>
+    <lightning-card title="Monthly Forecast Data (Hardcoded JSON)">
+        <canvas lwc:dom="manual" class="chart"></canvas>
+    </lightning-card>
+</template>
+import { LightningElement } from 'lwc';
+import ChartJs from '@salesforce/resourceUrl/chartJs';
+import { loadScript } from 'lightning/platformResourceLoader';
+
+const SAMPLE_DATA = {
+    Jan_2024: { Ideal: 100, Actual: 90 },
+    Feb_2024: { Ideal: 120, Actual: 110 },
+    Mar_2024: { Ideal: 130, Actual: 125 },
+    Apr_2024: { Ideal: 140, Actual: 135 },
+    May_2024: { Ideal: 150, Actual: 145 },
+    Jun_2024: { Ideal: 160, Actual: 155 },
+    Jul_2024: { Ideal: 170, Actual: 165 },
+    Aug_2024: { Ideal: 180, Actual: 175 },
+    Sep_2024: { Ideal: 190, Actual: 185 },
+    Oct_2024: { Ideal: 200, Actual: 195 },
+    Nov_2024: { Ideal: 210, Actual: 205 },
+    Dec_2024: { Ideal: 220, Actual: 215 },
+};
+
+export default class MonthlyBarChart extends LightningElement {
+    chart;
+    chartInitialized = false;
+    labels = [];
+    idealData = [];
+    actualData = [];
+
+    connectedCallback() {
+        // Prepare data from hardcoded JSON
+        this.labels = Object.keys(SAMPLE_DATA); // Jan_2024, Feb_2024, ..., Dec_2024
+        this.idealData = this.labels.map((month) => SAMPLE_DATA[month]?.Ideal || 0);
+        this.actualData = this.labels.map((month) => SAMPLE_DATA[month]?.Actual || 0);
+    }
+
+    renderedCallback() {
+        if (this.chartInitialized) {
+            return;
+        }
+        this.chartInitialized = true;
+
+        loadScript(this, ChartJs)
+            .then(() => {
+                this.renderChart();
+            })
+            .catch((error) => {
+                console.error('Error loading Chart.js', error);
+            });
+    }
+
+    renderChart() {
+        if (this.chart) {
+            this.chart.destroy();
+        }
+
+        const ctx = this.template.querySelector('canvas').getContext('2d');
+        this.chart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: this.labels,
+                datasets: [
+                    {
+                        label: 'Ideal',
+                        data: this.idealData,
+                        backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                        borderColor: 'rgba(75, 192, 192, 1)',
+                        borderWidth: 1,
+                    },
+                    {
+                        label: 'Actual',
+                        data: this.actualData,
+                        backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                        borderColor: 'rgba(255, 99, 132, 1)',
+                        borderWidth: 1,
+                    },
+                ],
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                    },
+                },
+            },
+        });
+    }
+}
