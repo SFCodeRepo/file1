@@ -1,0 +1,48 @@
+public class AddPTOHolidaysFor2025 {
+
+    public static void addUS2025Holidays() {
+        // List of US holidays in 2025
+        Map<Date, String> holidays = new Map<Date, String>{
+            Date.newInstance(2025, 1, 1) => 'New Year\'s Day',
+            Date.newInstance(2025, 1, 20) => 'Martin Luther King Jr. Day',
+            Date.newInstance(2025, 2, 17) => 'Presidents\' Day',
+            Date.newInstance(2025, 5, 26) => 'Memorial Day',
+            Date.newInstance(2025, 7, 4) => 'Independence Day',
+            Date.newInstance(2025, 9, 1) => 'Labor Day',
+            Date.newInstance(2025, 11, 11) => 'Veterans Day',
+            Date.newInstance(2025, 11, 27) => 'Thanksgiving Day',
+            Date.newInstance(2025, 12, 25) => 'Christmas Day'
+        };
+
+        // Query users with the Sales Rep profile
+        List<User> salesReps = [SELECT Id FROM User WHERE Profile.Name = 'Sales Rep'];
+
+        if (salesReps.isEmpty()) {
+            System.debug('No Sales Rep users found.');
+            return;
+        }
+
+        // Create PTO_Details__c records
+        List<PTO_Details__c> ptoRecords = new List<PTO_Details__c>();
+        for (User user : salesReps) {
+            for (Date holidayDate : holidays.keySet()) {
+                PTO_Details__c pto = new PTO_Details__c();
+                pto.PTO_Start_Date__c = holidayDate;
+                pto.PTO_End_Date__c = holidayDate;
+                pto.User__c = user.Id; // Lookup to User
+                pto.Name = holidays.get(holidayDate); // Optional: Assign holiday name
+                ptoRecords.add(pto);
+            }
+        }
+
+        // Insert records
+        if (!ptoRecords.isEmpty()) {
+            try {
+                insert ptoRecords;
+                System.debug(ptoRecords.size() + ' PTO_Details__c records inserted.');
+            } catch (DmlException e) {
+                System.debug('Error inserting PTO_Details__c records: ' + e.getMessage());
+            }
+        }
+    }
+}
