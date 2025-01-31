@@ -1,0 +1,61 @@
+trigger AccountSharingTrigger on Account (after insert, after update) {
+    // Query the 'Store' record type for Accounts once.
+    RecordType storeRT = [
+        SELECT Id 
+        FROM RecordType 
+        WHERE SObjectType = 'Account' 
+          AND DeveloperName = 'Store'
+        LIMIT 1
+    ];
+
+    // Create a set to collect the IDs of qualifying Account records.
+    Set<Id> qualifyingAccountIds = new Set<Id>();
+
+    // Loop through trigger records and add those that meet the criteria.
+    for (Account acc : Trigger.new) {
+        // Check record type and that LCR__c is not null.
+        if (acc.RecordTypeId == storeRT.Id && acc.LCR__c != null) {
+            // For update operations, only process if LCR__c has changed.
+            if (Trigger.isInsert) {
+                qualifyingAccountIds.add(acc.Id);
+            } else if (Trigger.isUpdate) {
+                Account oldAcc = Trigger.oldMap.get(acc.Id);
+                if (acc.LCR__c != oldAcc.LCR__c) {
+                    qualifyingAccountIds.add(acc.Id);
+                }
+            }
+        }
+    }
+
+    // Only process if there is at least one qualifying Account.
+    if (!qualifyingAccountIds.isEmpty()) {
+        // Create a map from Trigger.new for easier access by Account Id.
+        Map<Id, Account> newAccountsMap = new Map<Id, Account>(Trigger.new);
+
+        // Prepare a list to hold AccountShare records.
+        List<AccountShare> sharesToInsert = new List<AccountShare>();
+
+        // Loop over the qualifying Account IDs to create sharing records.
+        for (Id accId : qualifyingAccountIds) {
+            Account acc = newAccountsMap.get(accId);
+            AccountShare accShare = new AccountShare();
+            accShare.AccountId = accId;
+            
+            // Assumes LCR__c holds the Id of a User or Group to share with.
+            accShare.UserOrGroupId = acc.LCR__c;
+            
+            // Set the access level to 'Read'
+            accShare.AccountAccessLevel = 'Read';
+            
+            // Set the sharing reason to Manual.
+            accShare.RowCause = Schema.AccountShare.RowCause.Manual;
+            
+            sharesToInsert.add(accShare);
+        }
+
+        // Bulk insert all the AccountShare records.
+        if (!sharesToInsert.isEmpty()) {
+            insert sharesToInsert;
+        }
+    }
+}
