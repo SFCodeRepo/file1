@@ -1,3 +1,13 @@
+
+Salesforce Org and Data Cleanup – Conduct a comprehensive review of the Salesforce Org to identify and remove unused components, optimize metadata, and improve system performance. Additionally, perform data cleansing by eliminating duplicates, standardizing records, and ensuring data accuracy to enhance reporting and decision-making.
+
+Implement and Maintain GitHub Source Control – Establish a structured GitHub repository for version control, ensuring proper branching strategies, CI/CD integration, and documentation to streamline development and deployment processes.
+
+Enhance field sales productivity through Salesforce automation to reduce costs and drive revenue growth
+Empower field sales with automation for faster task handling and better planning.
+Eliminate redundant steps and ensure accurate, timely data.
+Achieve cost savings and increased revenue through smarter sales processes.
+
 trigger AccountSharingTrigger on Account (after insert, after update) {
     // Query the 'Store' record type for Accounts once.
     RecordType storeRT = [
