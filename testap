@@ -1,42 +1,116 @@
 @isTest
 private class TestUpdateContactRecordTypeBatch {
 
-    @isTest
-    static void testContactBatchExecution() {
-        // Step 1: Create a custom RecordType for Contact
+    // Utility method to create a custom RecordType
+    private static Id createTestRecordType(String devName, String label) {
         RecordType rt = new RecordType(
             SObjectType = 'Contact',
-            DeveloperName = 'Your_RecordType_Name',
-            Name = 'Test Contact RT',
+            DeveloperName = devName,
+            Name = label,
             IsActive = true
         );
         insert rt;
+        return rt.Id;
+    }
 
-        // Step 2: Create test Contact records with ABC_LDAP__c set
+    // Utility method to create test Contacts
+    private static List<Contact> createTestContacts(Integer count, Boolean populateABC) {
         List<Contact> contacts = new List<Contact>();
-        for (Integer i = 0; i < 5; i++) {
-            contacts.add(new Contact(
-                LastName = 'Test Contact ' + i,
-                ABC_LDAP__c = 'LDAP_' + i
-            ));
+        for (Integer i = 0; i < count; i++) {
+            Contact c = new Contact(
+                LastName = 'TestContact_' + i,
+                ABC_LDAP__c = populateABC ? 'LDAP_' + i : null
+            );
+            contacts.add(c);
         }
         insert contacts;
+        return contacts;
+    }
 
-        // Step 3: Run the batch
+    @isTest
+    static void testBatchWithValidContacts() {
+        Id rtId = createTestRecordType('Valid_RT', 'Valid Record Type');
+        List<Contact> contacts = createTestContacts(10, true);
+
         Test.startTest();
             UpdateContactRecordTypeBatch batch = new UpdateContactRecordTypeBatch();
             Database.executeBatch(batch, 2);
         Test.stopTest();
 
-        // Step 4: Assert RecordTypeId is updated
-        List<Contact> updatedContacts = [
-            SELECT RecordTypeId FROM Contact WHERE ABC_LDAP__c != null
-        ];
-        for (Contact c : updatedContacts) {
-            System.assertEquals(rt.Id, c.RecordTypeId, 'RecordTypeId should match expected');
+        List<Contact> updated = [SELECT Id, RecordTypeId FROM Contact WHERE ABC_LDAP__c != null];
+        for (Contact c : updated) {
+            System.assertEquals(rtId, c.RecordTypeId, 'RecordTypeId should match');
         }
 
-        // Step 5: Assert email was sent
+        System.assertEquals(1, Limits.getEmailInvocations(), 'One email expected');
+    }
+
+    @isTest
+    static void testBatchWithNoMatchingContacts() {
+        createTestRecordType('NoMatch_RT', 'No Match RT');
+        createTestContacts(5, false); // All ABC_LDAP__c = null
+
+        Test.startTest();
+            UpdateContactRecordTypeBatch batch = new UpdateContactRecordTypeBatch();
+            Database.executeBatch(batch, 2);
+        Test.stopTest();
+
+        List<Contact> contacts = [SELECT Id, RecordTypeId FROM Contact WHERE ABC_LDAP__c = null];
+        for (Contact c : contacts) {
+            System.assertEquals(null, c.RecordTypeId, 'RecordTypeId should remain unchanged');
+        }
+    }
+
+    @isTest
+    static void testBatchWithMixedContacts() {
+        Id rtId = createTestRecordType('Mixed_RT', 'Mixed RT');
+        createTestContacts(3, true);
+        createTestContacts(2, false);
+
+        Test.startTest();
+            UpdateContactRecordTypeBatch batch = new UpdateContactRecordTypeBatch();
+            Database.executeBatch(batch, 2);
+        Test.stopTest();
+
+        List<Contact> updated = [SELECT Id, RecordTypeId, ABC_LDAP__c FROM Contact WHERE ABC_LDAP__c != null];
+        System.assertEquals(3, updated.size(), '3 contacts should be updated');
+        for (Contact c : updated) {
+            System.assertEquals(rtId, c.RecordTypeId, 'RecordTypeId should be updated');
+        }
+    }
+
+    @isTest
+    static void testLargeVolumeBatch() {
+        Id rtId = createTestRecordType('Bulk_RT', 'Bulk Record Type');
+        createTestContacts(200, true);
+
+        Test.startTest();
+            UpdateContactRecordTypeBatch batch = new UpdateContactRecordTypeBatch();
+            Database.executeBatch(batch, 50);
+        Test.stopTest();
+
+        List<Contact> updated = [SELECT Id, RecordTypeId FROM Contact WHERE ABC_LDAP__c != null];
+        System.assertEquals(200, updated.size(), 'All 200 contacts should be processed');
+        for (Contact c : updated) {
+            System.assertEquals(rtId, c.RecordTypeId, 'RecordTypeId should be set correctly');
+        }
+    }
+
+    @isTest
+    static void testRecordTypeRetrievalLogic() {
+        // Ensure correct RecordType is retrieved
+        Id rtId = createTestRecordType('Validation_RT', 'Validation RT');
+        Id fetchedRTId = UpdateContactRecordTypeBatch.getTargetRecordTypeId();
+        System.assertEquals(rtId, fetchedRTId, 'RecordTypeId from method should match inserted');
+    }
+
+    @isTest
+    static void testFinishMethodEmailOnly() {
+        // Simulate running finish method directly
+        Test.startTest();
+            UpdateContactRecordTypeBatch batch = new UpdateContactRecordTypeBatch();
+            batch.finish(null);
+        Test.stopTest();
         System.assertEquals(1, Limits.getEmailInvocations(), 'One email should be sent');
     }
 }
