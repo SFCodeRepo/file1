@@ -1,34 +1,42 @@
-public class UpdateAccountRecordTypeBatch implements Database.Batchable<SObject> {
+@isTest
+private class TestUpdateContactRecordTypeBatch {
 
-    // Fetch target RecordTypeId
-    public static Id getTargetRecordTypeId() {
-        return [SELECT Id FROM RecordType 
-                WHERE SObjectType = 'Account' AND DeveloperName = 'Your_RecordType_Name' 
-                LIMIT 1].Id;
-    }
+    @isTest
+    static void testContactBatchExecution() {
+        // Step 1: Create a custom RecordType for Contact
+        RecordType rt = new RecordType(
+            SObjectType = 'Contact',
+            DeveloperName = 'Your_RecordType_Name',
+            Name = 'Test Contact RT',
+            IsActive = true
+        );
+        insert rt;
 
-    public Database.QueryLocator start(Database.BatchableContext BC) {
-        return Database.getQueryLocator([
-            SELECT Id 
-            FROM Account 
-            WHERE ABC__c != null
-        ]);
-    }
-
-    public void execute(Database.BatchableContext BC, List<Account> scope) {
-        Id targetRTId = getTargetRecordTypeId();
-        for (Account acc : scope) {
-            acc.RecordTypeId = targetRTId;
+        // Step 2: Create test Contact records with ABC_LDAP__c set
+        List<Contact> contacts = new List<Contact>();
+        for (Integer i = 0; i < 5; i++) {
+            contacts.add(new Contact(
+                LastName = 'Test Contact ' + i,
+                ABC_LDAP__c = 'LDAP_' + i
+            ));
         }
-        update scope;
-    }
+        insert contacts;
 
-    public void finish(Database.BatchableContext BC) {
-        // Send an email notification after batch completes
-        Messaging.SingleEmailMessage mail = new Messaging.SingleEmailMessage();
-        mail.setToAddresses(new String[] { 'your-email@example.com' });  // Change to your actual email
-        mail.setSubject('Batch Job Completed: Account RecordType Updated');
-        mail.setPlainTextBody('The batch job to update Account RecordTypeId has successfully completed.');
-        Messaging.sendEmail(new Messaging.SingleEmailMessage[] { mail });
+        // Step 3: Run the batch
+        Test.startTest();
+            UpdateContactRecordTypeBatch batch = new UpdateContactRecordTypeBatch();
+            Database.executeBatch(batch, 2);
+        Test.stopTest();
+
+        // Step 4: Assert RecordTypeId is updated
+        List<Contact> updatedContacts = [
+            SELECT RecordTypeId FROM Contact WHERE ABC_LDAP__c != null
+        ];
+        for (Contact c : updatedContacts) {
+            System.assertEquals(rt.Id, c.RecordTypeId, 'RecordTypeId should match expected');
+        }
+
+        // Step 5: Assert email was sent
+        System.assertEquals(1, Limits.getEmailInvocations(), 'One email should be sent');
     }
 }
