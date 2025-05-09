@@ -1,117 +1,34 @@
-public class AddPTOHolidaysFor2025 {
+public class UpdateAccountRecordTypeBatch implements Database.Batchable<SObject> {
 
-    public static void addUS2025Holidays() {
-        // List of US holidays in 2025
-        Map<Date, String> holidays = new Map<Date, String>{
-            Date.newInstance(2025, 1, 1) => 'New Year\'s Day',
-            Date.newInstance(2025, 1, 20) => 'Martin Luther King Jr. Day',
-            Date.newInstance(2025, 2, 17) => 'Presidents\' Day',
-            Date.newInstance(2025, 5, 26) => 'Memorial Day',
-            Date.newInstance(2025, 7, 4) => 'Independence Day',
-            Date.newInstance(2025, 9, 1) => 'Labor Day',
-            Date.newInstance(2025, 11, 11) => 'Veterans Day',
-            Date.newInstance(2025, 11, 27) => 'Thanksgiving Day',
-            Date.newInstance(2025, 12, 25) => 'Christmas Day'
-        };
+    // Fetch target RecordTypeId
+    public static Id getTargetRecordTypeId() {
+        return [SELECT Id FROM RecordType 
+                WHERE SObjectType = 'Account' AND DeveloperName = 'Your_RecordType_Name' 
+                LIMIT 1].Id;
+    }
 
-        // Query users with the Sales Rep profile
-        List<User> salesReps = [SELECT Id FROM User WHERE Profile.Name = 'Sales Rep'];
+    public Database.QueryLocator start(Database.BatchableContext BC) {
+        return Database.getQueryLocator([
+            SELECT Id 
+            FROM Account 
+            WHERE ABC__c != null
+        ]);
+    }
 
-        if (salesReps.isEmpty()) {
-            System.debug('No Sales Rep users found.');
-            return;
+    public void execute(Database.BatchableContext BC, List<Account> scope) {
+        Id targetRTId = getTargetRecordTypeId();
+        for (Account acc : scope) {
+            acc.RecordTypeId = targetRTId;
         }
+        update scope;
+    }
 
-        // Create PTO_Details__c records
-        List<PTO_Details__c> ptoRecords = new List<PTO_Details__c>();
-        for (User user : salesReps) {
-            for (Date holidayDate : holidays.keySet()) {
-                PTO_Details__c pto = new PTO_Details__c();
-                pto.PTO_Start_Date__c = holidayDate;
-                pto.PTO_End_Date__c = holidayDate;
-                pto.User__c = user.Id; // Lookup to User
-                pto.Name = holidays.get(holidayDate); // Optional: Assign holiday name
-                ptoRecords.add(pto);
-            }
-        }
-
-        // Insert records
-        if (!ptoRecords.isEmpty()) {
-            try {
-                insert ptoRecords;
-                System.debug(ptoRecords.size() + ' PTO_Details__c records inserted.');
-            } catch (DmlException e) {
-                System.debug('Error inserting PTO_Details__c records: ' + e.getMessage());
-            }
-        }
+    public void finish(Database.BatchableContext BC) {
+        // Send an email notification after batch completes
+        Messaging.SingleEmailMessage mail = new Messaging.SingleEmailMessage();
+        mail.setToAddresses(new String[] { 'your-email@example.com' });  // Change to your actual email
+        mail.setSubject('Batch Job Completed: Account RecordType Updated');
+        mail.setPlainTextBody('The batch job to update Account RecordTypeId has successfully completed.');
+        Messaging.sendEmail(new Messaging.SingleEmailMessage[] { mail });
     }
 }
-
-
-
-public class AddJanuary2025Holidays {
-
-    public static void addJan2025Holidays() {
-        // Define January 2025 holidays
-        Map<Date, String> janHolidays = new Map<Date, String>{
-            Date.newInstance(2025, 1, 1) => 'New Year\'s Day',
-            Date.newInstance(2025, 1, 20) => 'Martin Luther King Jr. Day'
-        };
-
-        // Query users with the Sales Rep profile
-        List<User> salesReps = [SELECT Id FROM User WHERE Profile.Name = 'Sales Rep'];
-
-        if (salesReps.isEmpty()) {
-            System.debug('No Sales Rep users found.');
-            return;
-        }
-
-        // Query existing PTO records for January 2025
-        Set<Date> janHolidayDates = janHolidays.keySet();
-        List<PTO_Details__c> existingPTOs = [
-            SELECT PTO_Start_Date__c, User__c
-            FROM PTO_Details__c
-            WHERE PTO_Start_Date__c IN :janHolidayDates
-        ];
-
-        // Create a map of UserId to existing holiday dates
-        Map<Id, Set<Date>> userHolidayMap = new Map<Id, Set<Date>>();
-        for (PTO_Details__c pto : existingPTOs) {
-            if (!userHolidayMap.containsKey(pto.User__c)) {
-                userHolidayMap.put(pto.User__c, new Set<Date>());
-            }
-            userHolidayMap.get(pto.User__c).add(pto.PTO_Start_Date__c);
-        }
-
-        // Prepare new PTO_Details__c records
-        List<PTO_Details__c> ptoRecordsToInsert = new List<PTO_Details__c>();
-        for (User user : salesReps) {
-            Set<Date> existingDates = userHolidayMap.containsKey(user.Id) ? userHolidayMap.get(user.Id) : new Set<Date>();
-
-            for (Date holidayDate : janHolidayDates) {
-                // Skip if the user already has a PTO record for this date
-                if (!existingDates.contains(holidayDate)) {
-                    PTO_Details__c pto = new PTO_Details__c();
-                    pto.PTO_Start_Date__c = holidayDate;
-                    pto.PTO_End_Date__c = holidayDate;
-                    pto.User__c = user.Id; // Lookup to User
-                    pto.Name = janHolidays.get(holidayDate); // Optional: Assign holiday name
-                    ptoRecordsToInsert.add(pto);
-                }
-            }
-        }
-
-        // Insert new PTO records
-        if (!ptoRecordsToInsert.isEmpty()) {
-            try {
-                insert ptoRecordsToInsert;
-                System.debug(ptoRecordsToInsert.size() + ' PTO_Details__c records inserted for January 2025.');
-            } catch (DmlException e) {
-                System.debug('Error inserting PTO_Details__c records: ' + e.getMessage());
-            }
-        } else {
-            System.debug('No new PTO records to insert for January 2025.');
-        }
-    }
-}
-
