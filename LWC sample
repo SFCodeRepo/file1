@@ -1,0 +1,45 @@
+<template>
+    <lightning-card title="Recent Activity Feed" icon-name="standard:feed">
+        <template if:true={feedItems}>
+            <template for:each={feedItems} for:item="item">
+                <div key={item.modifiedDate} class="slds-box slds-m-around_x-small slds-theme_default">
+                    <p>
+                        <strong>{item.objectType}</strong>
+                        &nbsp;—&nbsp;{item.fieldName}
+                    </p>
+                    <p>{item.changeDescription}</p>
+                    <p class="slds-text-color_weak">
+                        By {item.modifiedBy}
+                        on <lightning-formatted-date-time value={item.modifiedDate}></lightning-formatted-date-time>
+                    </p>
+                </div>
+            </template>
+        </template>
+
+        <template if:true={error}>
+            <div class="slds-text-color_error slds-m-around_small">
+                Error: {error}
+            </div>
+        </template>
+    </lightning-card>
+</template>
+
+
+import { LightningElement, wire } from 'lwc';
+import getRecentFeed from '@salesforce/apex/ServiceFeedController.getRecentFeed';
+
+export default class GlobalFeed extends LightningElement {
+    feedItems;
+    error;
+
+    @wire(getRecentFeed)
+    wiredFeed({ error, data }) {
+        if (data) {
+            this.feedItems = data;
+            this.error = undefined;
+        } else if (error) {
+            this.error = error.body.message || error.message;
+            this.feedItems = undefined;
+        }
+    }
+}
